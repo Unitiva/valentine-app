@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function QuestionCard({
@@ -12,22 +12,50 @@ export default function QuestionCard({
   onTimeout,
 }) {
   const [timeLeft, setTimeLeft] = useState(timerSeconds);
+  const questionRef = useRef(question);
+  const hasAnsweredRef = useRef(false);
+
+  // Aggiorna la ref quando cambia la domanda
+  useEffect(() => {
+    questionRef.current = question;
+    hasAnsweredRef.current = false;
+  }, [question]);
+
+  const handleSelect = useCallback(
+    (answer) => {
+      if (hasAnsweredRef.current) return;
+      hasAnsweredRef.current = true;
+      onSelect(answer);
+    },
+    [onSelect],
+  );
 
   const handleTimeout = useCallback(() => {
+    if (hasAnsweredRef.current) return;
+
     if (onTimeout) {
+      hasAnsweredRef.current = true;
       onTimeout();
     } else {
-      // Seleziona una risposta random se scade il tempo
-      const randomAnswer =
-        question.options[Math.floor(Math.random() * question.options.length)];
-      onSelect(randomAnswer);
+      const currentQuestion = questionRef.current;
+      if (currentQuestion?.options?.length) {
+        // Seleziona una risposta random se scade il tempo
+        const randomAnswer =
+          currentQuestion.options[
+            Math.floor(Math.random() * currentQuestion.options.length)
+          ];
+        hasAnsweredRef.current = true;
+        onSelect(randomAnswer);
+      }
     }
-  }, [onTimeout, onSelect, question.options]);
+  }, [onTimeout, onSelect]);
 
   useEffect(() => {
-    if (!timerEnabled) return;
+    if (!timerEnabled || !question) return;
 
     setTimeLeft(timerSeconds);
+    hasAnsweredRef.current = false;
+
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -40,7 +68,12 @@ export default function QuestionCard({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timerEnabled, timerSeconds, question.id, handleTimeout]);
+  }, [timerEnabled, timerSeconds, question?.id, handleTimeout]);
+
+  // Early return DOPO tutti gli hooks
+  if (!question) {
+    return null;
+  }
 
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
   const timerProgress = (timeLeft / timerSeconds) * 100;
@@ -110,7 +143,7 @@ export default function QuestionCard({
             {question.options.map((opt, index) => (
               <motion.button
                 key={index}
-                onClick={() => onSelect(opt)}
+                onClick={() => handleSelect(opt)}
                 className="bg-white/95 text-pink-600 py-3 rounded-xl font-semibold shadow hover:bg-white transition w-full"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
